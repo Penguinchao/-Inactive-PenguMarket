@@ -7,3 +7,11 @@ mysqlDatabase: PenguMarket
 
 #Debug Settings
 debugenabled: true
+
+#Messages
+two-shops-at-once: You can only create one shop at once.
+ask-for-item: Hit your shop with the item that you want to sell.
+player-not-online: That player is not online.
+wrong-pricing-syntax: Incorrect shop syntax. See help command for details.
+cant-sell-air: You cannot sell AIR.
+sign-placeholder: Item
