@@ -1,0 +1,9 @@
+#Database Settings
+mysqlHostName: localhost
+mysqlPort: 3306
+mysqlUsername: root
+mysqlPassword:
+mysqlDatabase: PenguMarket
+
+#Debug Settings
+debugenabled: true

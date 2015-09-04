@@ -1,0 +1,9 @@
+main: com.penguinchao.pengumarket.PenguMarket
+version: 0.1
+name: PenguMarket
+
+commands:
+#    setshopping:
+permissions:
+    pengumarket.admin.forcemakeshop: #Allows the making of shops for someone else
+        default: op
