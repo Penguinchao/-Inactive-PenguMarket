@@ -3,7 +3,11 @@ package com.penguinchao.pengumarket;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.UUID;
 
 import org.apache.commons.lang.math.NumberUtils;
@@ -11,18 +15,24 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.block.SignChangeEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+
 public class PenguMarket extends JavaPlugin implements Listener {
+	public Boolean databaseConnected = true;
+	//Basic Plugin sections
+	@Override
 	public void onEnable(){
 		getLogger().info("Initializing PenguMarket");
 		saveDefaultConfig();
@@ -30,6 +40,16 @@ public class PenguMarket extends JavaPlugin implements Listener {
 		debugOut("Register Events - Beginning");
 		getServer().getPluginManager().registerEvents(this, this);
 		debugOut("Register Events - Finishing");
+		debugOut("Openning SQL Connection");
+		databaseConnect();
+	}
+	public void onDisable(){
+		//FINAL Close SQL connection
+		try {
+			connection.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 	}
 	public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args){
 		return false;
@@ -48,6 +68,7 @@ public class PenguMarket extends JavaPlugin implements Listener {
 		player.sendMessage(ChatColor.GREEN + message);
 	}
 
+	HashMap<String, Integer> ActivePlayerShop = new HashMap<String, Integer>();
 	HashMap<String, String> PlayerMakingShop = new HashMap<String, String>();
 	public Boolean isMakingShop(Player player){
 		//tests to see if the player is currently creating another shop
@@ -73,9 +94,8 @@ public class PenguMarket extends JavaPlugin implements Listener {
 		return false;
 	}
 	public Boolean isCorrectPricing(String priceline){
-		//Will check format of line
 		//Correct Format: B 5 : 3 S
-
+		//B for buy, number for buy price, colon, number for selling price, S for sell
 		String[] brokenPrice = priceline.split(" ");
 		if(brokenPrice == null){
 			debugOut("Price line was empty!");
@@ -109,11 +129,82 @@ public class PenguMarket extends JavaPlugin implements Listener {
 			return false;
 		}
 	}
-	public void establishShop(String owner, String establisher, String establisherName, Integer x, Integer y, Integer z, World world, ItemStack item){
+	public void establishShop(String owner, String establisher, String establisherName, Integer x, Integer y, Integer z, World world, ItemStack item, Float buy, Float sell){
+		String displayName = item.getItemMeta().getDisplayName();
+		String material = item.getType().toString();
+		String enchantments = enchantmentsToString(item);
+		//Insert in to database
+		String query = "INSERT INTO shops (shopowner, shopestablisher, x, y, z, world, itemname, itemmaterial, itemenchantments, buy, sell) VALUES ('"+
+				owner+"', '"+
+				establisher+"', '"+
+				x+"', '"+
+				y+"', '"+
+				z+"', '"+
+				world + "', '"+
+				displayName+"', '"+
+				material+"', '"+
+				enchantments+"', '"+
+				buy+"', '"+
+				sell+"' "+
+				");";
+		debugOut("Performing Query:");
+		debugOut(query);
+		try {
+			PreparedStatement sql = connection.prepareStatement(query);
+			sql.executeUpdate();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 		//temporary null code
 		//Will place the shop in the database
 		PlayerMakingShop.remove(establisherName);
-		debugOut(establisherName+"is finished making a shop");
+		debugOut(establisherName+" is finished making a shop");
+		
+	}
+	public String enchantmentsToString(ItemStack item){
+		Map<Enchantment, Integer> a = item.getEnchantments();
+		String returnMe = "";
+		for(Entry<Enchantment, Integer> entry : a.entrySet()) {
+		    returnMe = returnMe+entry.getKey().getName()+","+entry.getValue().toString()+";";
+		    debugOut("Enchantments: "+returnMe);
+		}
+		return returnMe;
+	}
+	public Boolean compareStringEnchantments(ItemStack playerItem, String shopItem){
+		String shopString = shopItem;
+		String playerString = enchantmentsToString(playerItem);
+		debugOut("Comparing Enchantments:");
+		String[] shopBundled = shopString.split(";");
+		String[] playerBundled = playerString.split(";");
+		int shopLength=shopBundled.length;
+		int playerLength=playerBundled.length;
+		debugOut("shopString"+"["+shopLength+"]: "+shopString);
+		debugOut("playerString"+"["+playerLength+"]: "+playerString);
+		if(Integer.valueOf(shopLength)==0 && Integer.valueOf(playerLength)==0){
+			return true;
+		}else{
+			if(Integer.valueOf(playerLength)==Integer.valueOf(shopLength)){
+				for(int i=0; i<shopLength; i++){
+					if(findMatchingString(shopBundled[i], playerBundled)==false){
+						return false;
+					}
+				}
+				return true;
+			}
+			return false;
+		}
+	}
+	public Boolean findMatchingString(String findMe, String[] list){
+		int length = list.length;
+		for(int i=0; i<length; i++){
+			if(findMe.equalsIgnoreCase(list[i])){
+				debugOut(findMe+" is the same as "+list[i]);
+				return true;
+			}
+			debugOut(findMe+" is not the same as "+list[i]);
+		}
+		debugOut("The enchantment '"+findMe+"' could not be found in this list");
+		return false;
 	}
 	//My Event Handlers
 	@EventHandler
@@ -122,7 +213,11 @@ public class PenguMarket extends JavaPlugin implements Listener {
 		//getLogger().info("MEEP");
 		if(event.getBlock().getType()==Material.SIGN_POST || event.getBlock().getType()==Material.WALL_SIGN){
 			debugOut("A sign was done damage.");
+			//Credit: https://bukkit.org/threads/how-to-convert-block-class-to-sign-class.102313/
+			BlockState blockState = event.getBlock().getState();
+			Sign sign = (Sign) blockState;
 			if(isMakingShop(event.getPlayer())){
+				//Do this if the player hits a shop while making one
 				debugOut(event.getPlayer()+" is making a shop");
 				String[] playerHashInfo = PlayerMakingShop.get(event.getPlayer().getName() ).split(",");
 				Integer shopX = event.getBlock().getX();
@@ -142,7 +237,11 @@ public class PenguMarket extends JavaPlugin implements Listener {
 						debugOut("Begin establishing Shop at xyz ("+shopX+","+shopY+","+shopZ+") in "+shopWorld);
 						String ownerUUID = playerHashInfo[4];
 						String establisherUUID = playerHashInfo[5];
-						establishShop(ownerUUID, establisherUUID, event.getPlayer().getName(),shopX, shopY, shopZ, event.getBlock().getWorld(), equipped);
+						playerSuccess(event.getPlayer(), "Success!");
+						String[] buyLine = sign.getLine(2).split(" ");
+						Float buy = Float.valueOf(buyLine[1]);
+						Float sell = Float.valueOf(buyLine[3]);
+						establishShop(ownerUUID, establisherUUID, event.getPlayer().getName(),shopX, shopY, shopZ, event.getBlock().getWorld(), equipped, buy, sell);
 					}else{
 						debugOut(event.getPlayer().getName()+" hit the shop with Air, which cannot be sold");
 						playerError(event.getPlayer(), getConfig().getString("cant-sell-air") );
@@ -170,14 +269,74 @@ public class PenguMarket extends JavaPlugin implements Listener {
 						debugOut(playerWorld + " does not equal " + shopWorld);
 					}
 				}
+			} else if(sign.getLine(0).equals(getConfig().getString("sign-header"))){
+				//Do this if the player hit a shop, when he wasn't making one.
+				Integer thisShopID = getShopID(event.getBlock().getX(), event.getBlock().getY(), event.getBlock().getZ(), event.getBlock().getWorld() );//GET FROM DATABASE
+				debugOut(event.getPlayer()+" is not making a shop, but did click on a shop sign");
+				if(ActivePlayerShop.containsKey(event.getPlayer().getName())){
+					Integer currentValue = ActivePlayerShop.get(event.getPlayer().getName());
+					if(Integer.valueOf(currentValue)==Integer.valueOf(thisShopID) && Integer.valueOf(currentValue)!=0 ){
+						//BUY FROM THE SHOP OR DEPOSIT
+						debugOut("Checking to see if the selected shop is owned");
+						String shopOwner = getShopOwner(thisShopID);
+						if(shopOwner!="null"){
+							if(shopOwner.equals(event.getPlayer().getUniqueId().toString()) ){
+								debugOut("Shop is owned");
+								//Do shop owner stuff
+								if(event.getPlayer().isSneaking()){
+									//withdraw a stack
+									debugOut("withdrawing one stack");
+								}else {
+									//withdraw one item
+									debugOut("withdrawing one item");
+								}
+							}else {
+								debugOut("Shop is not owned");
+								//Do consumer stuff
+								if(event.getPlayer().isSneaking()){
+									//buy a stack
+									debugOut("buying a stack");
+								}else {
+									//buy one item
+									debugOut("buying one item");
+								}
+							}
+						}else {
+							debugOut("This shop does not exist; is it finished being created?");
+						}
+					} else {
+						debugOut("A shop was activated, but it was not this one; changing to this shop");
+						ActivePlayerShop.put(event.getPlayer().getName(), thisShopID);
+						showShopInfo(thisShopID, event.getPlayer());
+					}
+				} else {
+					debugOut("No shop activated, activating it");
+					ActivePlayerShop.put(event.getPlayer().getName(), thisShopID);
+					showShopInfo(thisShopID, event.getPlayer());
+				}
 			}
 		}
+	}
+	public String getShopOwner(Integer shopID){
+		String query = "SELECT shopowner FROM `shops` WHERE `shop_id`="+shopID+";";
+		debugOut("Trying query: "+query);
+		PreparedStatement sql;
+		try {
+			sql = connection.prepareStatement(query);
+			ResultSet result = sql.executeQuery();
+			result.next();
+			return result.getString("shopowner");
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		debugOut("Shop not found");
+		return "null";
 	}
 	@EventHandler
 	public void onSignCreate (SignChangeEvent event){
 		debugOut("SignChangeEvent");
 		//Player player = event.getPlayer();
-		if (event.getLine(0).equals("[Shop]")){
+		if (event.getLine(0).equals(getConfig().getString("sign-header"))){
 			debugOut("Shop Sign Placed");
 			if(isMakingShop(event.getPlayer())==false){
 				debugOut(event.getPlayer().getName()+" is not making a shop yet");
@@ -218,26 +377,78 @@ public class PenguMarket extends JavaPlugin implements Listener {
 			}
 		}
 	}
-	/*//Deleting this code probably, because sign values are created when the shop is
-	@EventHandler
-	public void onChat (AsyncPlayerChatEvent event){ //Used to change sign values
-		debugOut("[AsyncPlayerChatEvent] " + event.getPlayer().getDisplayName() + ": " + event.getMessage());
-		if (NumberUtils.isNumber(event.getMessage())){
-			debugOut("[AsyncPlayerChatEvent] " + event.getMessage() + " is a number");
-			if(usingShop(event.getPlayer() )== true){
-				debugOut("[AsyncPlayerChatEvent] " + event.getPlayer().getDisplayName() + " is using a shop.");
-			}else {
-				debugOut("[AsyncPlayerChatEvent] " + event.getPlayer().getDisplayName() + " is not using a shop.");
+	public Integer getShopID(Integer x, Integer y, Integer z, World world){
+		//Look up shop ID through database queries
+		String query = "SELECT shop_id FROM `shops` WHERE `x`="+x+
+				" AND `y`="+y+
+				" AND `z`="+z+
+				" AND `world`="+world.getName()+
+				";";
+		debugOut("Trying query:"+query);
+
+			PreparedStatement sql;
+			try {
+				sql = connection.prepareStatement(query);
+				ResultSet result = sql.executeQuery();
+				result.next();
+				debugOut("Shop ID is "+result.getInt("shop_id"));
+				return result.getInt("shop_id");
+				
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				//e.printStackTrace();
+				//Commented out error, because this will be empty often
 			}
-		} else {
-			debugOut("[AsyncPlayerChatEvent] NOT Number");
+			//getLogger().info("[SEVERE] Cannot get shop by ID");
+			//Commented out, because someone may click on an unfinished sign; debug message instead
+			debugOut("Sign ID cannot be found");
+			return 0;
+	}
+	public void showShopInfo(Integer shopID, Player player){
+		String query = "SELECT * FROM `shops` WHERE `shop_id`="+shopID+";";
+		try {
+			PreparedStatement sql = connection.prepareStatement(query);
+			ResultSet result = sql.executeQuery();
+			result.next();
+			
+			String material= result.getString("itemmaterial");
+			String enchantments= result.getString("itemenchantments");
+			Integer stock= result.getInt("stock");
+			Integer buy= result.getInt("buy");
+			Integer sell= result.getInt("sell");
+			
+			player.sendMessage(ChatColor.YELLOW+"Shop Information:");
+			player.sendMessage(ChatColor.GREEN+"Item: "+ChatColor.BLUE+material);
+			sayEnchantments(enchantments, player);
+			player.sendMessage(ChatColor.GREEN+"Buying Price: "+ChatColor.BLUE+buy);
+			player.sendMessage(ChatColor.GREEN+"Selling Price: "+ChatColor.BLUE+sell);
+			player.sendMessage(ChatColor.GREEN+"Current Stock: "+ChatColor.BLUE+stock);
+			
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
 		}
 	}
-	*/
+	public void sayEnchantments(String enchantments, Player player){
+		String[] baseSplit = enchantments.split(";");
+		if(Integer.valueOf(baseSplit.length)>0){
+			player.sendMessage(ChatColor.GREEN+"Enchantments:");
+			for(int i=0; i<baseSplit.length;i++){
+				String[] bigSplit= baseSplit[i].split(",");
+				player.sendMessage(ChatColor.GREEN+"-"+ChatColor.BLUE+cleanEnchantmentName(bigSplit[0])+" "+bigSplit[1]);
+			}
+		}
+	}
+	public String cleanEnchantmentName(String name){
+		//Will make the enchantment names clean -- do later
+		return name;
+	}
+	//Will try a more refined SQL method
+	/*
 	public void executeQuery(String query){
 		Connection connection;
 		String mysqlHostName= getConfig().getString("mysqlHostName");
-		String mysqlPort= getConfig().getString("mysqlPort");
+		String mysqlPort	= getConfig().getString("mysqlPort");
 		String mysqlUsername= getConfig().getString("mysqlUsername");
 		String mysqlPassword= getConfig().getString("mysqlPassword");
 		String mysqlDatabase= getConfig().getString("mysqlDatabase");
@@ -252,4 +463,23 @@ public class PenguMarket extends JavaPlugin implements Listener {
 			getLogger().info("[SEVERE] Could not connect to the database");
 		}
 	}
+	*/
+	Connection connection;
+	public void databaseConnect(){
+
+			String mysqlHostName= getConfig().getString("mysqlHostName");
+			String mysqlPort	= getConfig().getString("mysqlPort");
+			String mysqlUsername= getConfig().getString("mysqlUsername");
+			String mysqlPassword= getConfig().getString("mysqlPassword");
+			String mysqlDatabase= getConfig().getString("mysqlDatabase");
+			String dburl = "jdbc:mysql://" + mysqlHostName + ":" + mysqlPort + "/" + mysqlDatabase;
+			debugOut("Attempting to connect to the database "+mysqlDatabase+" at "+mysqlHostName);
+			try{
+				connection = DriverManager.getConnection(dburl, mysqlUsername, mysqlPassword);
+			}catch(Exception exception){
+				getLogger().info("[SEVERE] Could not connect to the database");
+				databaseConnected = false;
+			}
+	}
+	
 }

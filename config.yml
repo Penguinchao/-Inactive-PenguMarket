@@ -9,6 +9,8 @@ mysqlDatabase: PenguMarket
 debugenabled: true
 
 #Messages
+sign-header: [Shop]
+atm-header: [ATM]
 two-shops-at-once: You can only create one shop at once.
 ask-for-item: Hit your shop with the item that you want to sell.
 player-not-online: That player is not online.
