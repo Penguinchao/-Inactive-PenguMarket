@@ -5,8 +5,12 @@ mysqlUsername: root
 mysqlPassword:
 mysqlDatabase: PenguMarket
 
-#Debug Settings
+#Settings
+#Toggles excessive console logging; use only if you are experiencing problems
 debugenabled: true
+#Adds a "sold by username" lore to items that are bought through the shops
+item-receipt: true
+item-receipt-text: Purchased from
 
 #Messages
 sign-header: [Shop]
@@ -15,5 +19,7 @@ two-shops-at-once: You can only create one shop at once.
 ask-for-item: Hit your shop with the item that you want to sell.
 player-not-online: That player is not online.
 wrong-pricing-syntax: Incorrect shop syntax. See help command for details.
+click-wrong-shop: Finish the shop you are making before shopping elsewhere.
 cant-sell-air: You cannot sell AIR.
-sign-placeholder: Item
+out-of-stock: This shop is currently out of stock.
+#sign-placeholder: Item

@@ -5,6 +5,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -26,6 +27,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 
@@ -248,6 +250,7 @@ public class PenguMarket extends JavaPlugin implements Listener {
 					}
 				}else {
 					debugOut(event.getPlayer().getName()+" did not hit the shop the shop (s)he was creating");
+					playerError(event.getPlayer(), getConfig().getString("click-wrong-shop"));
 					if(shopX.intValue()==playerX.intValue()){
 						debugOut("X matches");
 					}else{
@@ -280,15 +283,31 @@ public class PenguMarket extends JavaPlugin implements Listener {
 						debugOut("Checking to see if the selected shop is owned");
 						String shopOwner = getShopOwner(thisShopID);
 						if(shopOwner!="null"){
+							Integer currentStock = getStock(thisShopID);
 							if(shopOwner.equals(event.getPlayer().getUniqueId().toString()) ){
 								debugOut("Shop is owned");
 								//Do shop owner stuff
 								if(event.getPlayer().isSneaking()){
 									//withdraw a stack
-									debugOut("withdrawing one stack");
+									debugOut("withdrawing one stack -- attempt");
+									
 								}else {
 									//withdraw one item
-									debugOut("withdrawing one item");
+									debugOut("withdrawing one item -- attempt");
+									if(Integer.valueOf(currentStock)>0){
+										//Add one to player
+										debugOut("In Stock");
+										debugOut("Retrieving the item");
+										ItemStack currentItem = getShopItem(thisShopID, 1, sign.getLine(3) );
+										debugOut("Item retrieved -- giving to player");
+										event.getPlayer().getInventory().addItem(currentItem);
+										debugOut("Decreasing stock by one...");
+										setStock(thisShopID, currentStock-1);
+										debugOut("Transaction Completed");
+									}else {
+										debugOut("Out of Stock");
+										playerError(event.getPlayer(), getConfig().getString("out-of-stock"));
+									}
 								}
 							}else {
 								debugOut("Shop is not owned");
@@ -299,6 +318,7 @@ public class PenguMarket extends JavaPlugin implements Listener {
 								}else {
 									//buy one item
 									debugOut("buying one item");
+									
 								}
 							}
 						}else {
@@ -316,6 +336,72 @@ public class PenguMarket extends JavaPlugin implements Listener {
 				}
 			}
 		}
+	}
+	public ItemStack getShopItem(Integer shopID, int quantity, String seller){
+		//Converts database strings for this item to an ItemStack		
+		Material itemMaterial = null;
+		String material = null;
+		String enchantments = null;
+		String name = "";
+		String query = "SELECT * FROM `shops` WHERE `shop_id`="+shopID+";";
+		debugOut("Executing query: "+ query);
+		try {
+			PreparedStatement sql = connection.prepareStatement(query);
+			ResultSet result = sql.executeQuery();
+			debugOut("Query Completed");
+			result.next();
+			material= result.getString("itemmaterial");
+			enchantments= result.getString("itemenchantments");
+			name = result.getString("itemname");
+		}catch (SQLException e) {
+			debugOut("SQL Problem");
+			e.printStackTrace();
+		}
+		debugOut("Beginning to assign variables");
+		debugOut("Material");
+		itemMaterial= Material.getMaterial(material);
+		debugOut("New item stack");
+		ItemStack shopItem = new ItemStack(itemMaterial, quantity);
+		debugOut("Creating item meta");
+		ItemMeta meta = shopItem.getItemMeta();
+		debugOut("Item meta: Display Name");
+		if(name.equalsIgnoreCase(null) || name.equalsIgnoreCase("") || name.equalsIgnoreCase("null") ){
+			//Do Nothing'
+			debugOut("No set item name -- Skipping");
+		}else{
+			debugOut("Setting item name to: "+name);
+			meta.setDisplayName(name);
+		}
+		debugOut("Enchanting...");
+		String[] brokenEnchantments = enchantments.split(";");
+		if(!enchantments.equalsIgnoreCase("")){
+			for(int i=0; i<brokenEnchantments.length; i++){
+				debugOut("Splitting: "+brokenEnchantments[i]);
+				String[] brokenValues = brokenEnchantments[i].split(",");
+				debugOut("Split Version: "+brokenValues[0]+" and "+brokenValues[1]);
+				String enchName = brokenValues[0];
+				debugOut("Final enchantment name string: "+enchName);
+				debugOut("Assigning enchantment variable");
+				debugOut(enchName);
+				Enchantment currentEnchantment = Enchantment.getByName(enchName);
+				debugOut("Assigning enchantment level integer");
+				int currentLevel = Integer.parseInt(brokenValues[1]);
+				debugOut("Adding (un)safe enchantment: "+currentEnchantment.getName()+" at level "+currentLevel);
+				shopItem.addUnsafeEnchantment(currentEnchantment, currentLevel);
+				debugOut("Enchantment added!");
+				
+			}
+		}else{
+			debugOut("No enchantments -- Skipping");
+		}
+		if(getConfig().getString("item-receipt")=="true"){
+			debugOut("Setting receipt");
+			meta.setLore(Arrays.asList(getConfig().getString("item-receipt-text"), seller));
+		}
+		debugOut("Assigning meta to the itemstack");
+		shopItem.setItemMeta(meta);
+		debugOut("Returning the itemstack");
+		return shopItem;
 	}
 	public String getShopOwner(Integer shopID){
 		String query = "SELECT shopowner FROM `shops` WHERE `shop_id`="+shopID+";";
@@ -345,7 +431,7 @@ public class PenguMarket extends JavaPlugin implements Listener {
 					if (event.getPlayer().hasPermission("pengumarket.admin.forcemakeshop")){
 						debugOut(event.getPlayer().getName() + " has permission to force make shops");
 						debugOut(event.getPlayer().getName() + " is attempting to make a shop for " + event.getLine(3));
-						event.setLine(1, getConfig().getString("sign-placeholder"));
+						//event.setLine(1, getConfig().getString("sign-placeholder"));
 						if(Bukkit.getServer().getPlayer(event.getLine(3)) != null && !event.getLine(3).equals("") ){
 							if(Bukkit.getServer().getPlayer(event.getLine(3)) != event.getPlayer()){
 								getLogger().info("[Internal Controls] " + event.getPlayer().getName() + "is attempting to create a shop for " + Bukkit.getServer().getPlayer(event.getLine(3)).getName() + " at xyz (" + event.getBlock().getX() + ", " + event.getBlock().getY() + ", " + event.getBlock().getZ() + ") in world (" + event.getBlock().getWorld() + ")" );
@@ -404,38 +490,71 @@ public class PenguMarket extends JavaPlugin implements Listener {
 			debugOut("Sign ID cannot be found");
 			return 0;
 	}
-	public void showShopInfo(Integer shopID, Player player){
-		String query = "SELECT * FROM `shops` WHERE `shop_id`="+shopID+";";
+	public Integer getStock(Integer shopID){
+		String query = "SELECT `stock` FROM `shops` WHERE `shop_id`="+shopID+";";
+		debugOut(query);
 		try {
 			PreparedStatement sql = connection.prepareStatement(query);
 			ResultSet result = sql.executeQuery();
 			result.next();
 			
+			Integer stock= result.getInt("stock");
+			return stock;
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		debugOut("getStock Failed -- returning value of 0");
+		return 0;
+	}
+	public void setStock(Integer shopID, Integer stock){
+		String query = "UPDATE `shops` SET stock=? WHERE shop_id=?;";
+		debugOut(query);
+		try {
+			PreparedStatement sql = connection.prepareStatement(query);
+			sql.setInt(1, stock);
+			sql.setInt(2, shopID);
+			sql.executeUpdate();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	public void showShopInfo(Integer shopID, Player player){
+		String query = "SELECT * FROM `shops` WHERE `shop_id`="+shopID+";";
+		debugOut(query);
+		try {
+			PreparedStatement sql = connection.prepareStatement(query);
+			ResultSet result = sql.executeQuery();
+			debugOut("Query Done");
+			result.next();
 			String material= result.getString("itemmaterial");
 			String enchantments= result.getString("itemenchantments");
 			Integer stock= result.getInt("stock");
 			Integer buy= result.getInt("buy");
 			Integer sell= result.getInt("sell");
-			
+			debugOut("Stock:"+stock+" Buy:"+buy+" Sell:"+sell+" Material:"+material+" Enchantments:"+enchantments);
 			player.sendMessage(ChatColor.YELLOW+"Shop Information:");
 			player.sendMessage(ChatColor.GREEN+"Item: "+ChatColor.BLUE+material);
-			sayEnchantments(enchantments, player);
+			if(!enchantments.equals("")){
+				sayEnchantments(enchantments, player);
+			}
 			player.sendMessage(ChatColor.GREEN+"Buying Price: "+ChatColor.BLUE+buy);
 			player.sendMessage(ChatColor.GREEN+"Selling Price: "+ChatColor.BLUE+sell);
 			player.sendMessage(ChatColor.GREEN+"Current Stock: "+ChatColor.BLUE+stock);
 			
 			
 		} catch (SQLException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
 		}
 	}
 	public void sayEnchantments(String enchantments, Player player){
 		String[] baseSplit = enchantments.split(";");
 		if(Integer.valueOf(baseSplit.length)>0){
-			player.sendMessage(ChatColor.GREEN+"Enchantments:");
-			for(int i=0; i<baseSplit.length;i++){
-				String[] bigSplit= baseSplit[i].split(",");
-				player.sendMessage(ChatColor.GREEN+"-"+ChatColor.BLUE+cleanEnchantmentName(bigSplit[0])+" "+bigSplit[1]);
+			if(baseSplit[0]!=""){
+				player.sendMessage(ChatColor.GREEN+"Enchantments:");
+				for(int i=0; i<baseSplit.length;i++){
+					String[] bigSplit= baseSplit[i].split(",");
+					player.sendMessage(ChatColor.GREEN+"-"+ChatColor.BLUE+cleanEnchantmentName(bigSplit[0])+" "+bigSplit[1]);
+				}
 			}
 		}
 	}
