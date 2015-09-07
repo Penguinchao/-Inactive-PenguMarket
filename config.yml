@@ -1,18 +1,49 @@
-#Database Settings
+#---Database Settings---
 mysqlHostName: localhost
 mysqlPort: 3306
 mysqlUsername: root
 mysqlPassword:
 mysqlDatabase: PenguMarket
 
-#Settings
+#---Settings---
 #Toggles excessive console logging; use only if you are experiencing problems
 debugenabled: true
-#Adds a "sold by username" lore to items that are bought through the shops
+#Adds a "Purchased from [username]" lore to valuable, unstackable items that are bought through the shops
 item-receipt: true
 item-receipt-text: Purchased from
+#If true, players can buy and withdraw from a shop with a full inventory, and the excess is dropped
+buy-when-full: false
+#If true, the database creates an entry for each transaction -- NOT IMPLEMENTED YET
+log-transactions: true
 
-#Messages
+#---Enchantment Names---
+ARROW_DAMAGE: Power
+ARROW_FIRE: Flame
+ARROW_INFINITE: Infinity
+ARROW_KNOCKBACK: Punch
+DAMAGE_ALL: Sharpness
+DAMAGE_ARTHROPODS: Bane of Arthropods
+DAMAGE_UNDEAD: Smite
+DEPTH_STRIDER: Depth Strider
+DIG_SPEED: Efficiency
+DURABILITY: Unbreaking
+FIRE_ASPECT: Fire Aspect
+KNOCKBACK: Knockback
+LOOT_BONUS_BLOCKS: Fortune
+LOOT_BONUS_MOBS: Looting
+LUCK: Luck of the Sea
+LURE: Lure
+OXYGEN: Respiration
+PROTECTION_ENVIRONMENTAL: Protection
+PROTECTION_EXPLOSIONS: Blast Protection
+PROTECTION_FALL: Feather Falling
+PROTECTION_FIRE: Fire Protection
+PROTECTION_PROJECTILE: Projectile Protection
+SILK_TOUCH: Silk Touch
+THORNS: Thorns
+WATER_WORKER: Aqua Affinity
+
+#---Messages---
 sign-header: [Shop]
 atm-header: [ATM]
 two-shops-at-once: You can only create one shop at once.
@@ -21,5 +52,13 @@ player-not-online: That player is not online.
 wrong-pricing-syntax: Incorrect shop syntax. See help command for details.
 click-wrong-shop: Finish the shop you are making before shopping elsewhere.
 cant-sell-air: You cannot sell AIR.
+cant-sell-book: You cannot sell written books.
 out-of-stock: This shop is currently out of stock.
-#sign-placeholder: Item
+not-enough-items: Insufficient stock in this shop.
+need-more-items: You do not have enough of this item in your inventory.
+full-inventory-error: There is not enough room in your inventory.
+insufficient-funds: Insufficient Funds
+shop-insufficient-funds: The owner of this shop does not have enough money to buy this.
+break-shop-warning: Destroying a shop that you own will put the stock in your inventory, then drop the rest on the ground.
+break-shop-success: Shop destroyed!
+not-sneaking-warning: Sneak to destroy a shop.

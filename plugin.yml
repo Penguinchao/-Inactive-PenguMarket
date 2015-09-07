@@ -5,5 +5,7 @@ name: PenguMarket
 commands:
 #    setshopping:
 permissions:
-    pengumarket.admin.forcemakeshop: #Allows the making of shops for someone else
+    pengumarket.admin.forcemakeshop: #Allows the making of shops for someone else by typing their display name in the last line
+        default: op
+    pengumarket.admin.destroyothershop: #Allows the destruction of someone else's shop
         default: op
